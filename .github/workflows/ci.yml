@@ -20,15 +20,19 @@ jobs:
           python-version: "3.13"
           cache: pip
 
-      - name: Install dependencies
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install backend dependencies
         run: python -m pip install -r requirements.txt
 
-      - name: Build backend and static frontend
-        run: |
-          python -m compileall -q src
-          mkdir -p build
-          cp -R src/static/. build/
-          test -s build/index.html
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build frontend
+        run: npm run build
 
       - name: Run backend tests
-        run: python -m pytest
+        run: npm test
