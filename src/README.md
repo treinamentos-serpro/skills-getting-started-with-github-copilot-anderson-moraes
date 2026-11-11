@@ -6,16 +6,25 @@ Uma aplicação FastAPI super simples que permite que estudantes visualizem e se
 
 - Visualizar todas as atividades extracurriculares disponíveis
 - Inscrever-se em atividades
+- Enviar, listar e baixar arquivos (limite de 10 MB por arquivo)
 
 ## Primeiros Passos
 
 1. Instale as dependências:
 
    ```
-   pip install fastapi uvicorn
+   pip install -r requirements.txt
    ```
 
-2. Execute a aplicação:
+2. Para compilar o frontend e executar os testes:
+
+   ```
+   npm ci
+   npm run build
+   npm test
+   ```
+
+3. Execute a aplicação:
 
    ```
    python app.py
@@ -31,6 +40,9 @@ Uma aplicação FastAPI super simples que permite que estudantes visualizem e se
 | ------ | ----------------------------------------------------------------- | --------------------------------------------------------------------------- |
 | GET    | `/activities`                                                     | Obtém todas as atividades com seus detalhes e contagem atual de participantes |
 | POST   | `/activities/{activity_name}/signup?email=student@mergington.edu` | Inscreve-se em uma atividade                                                |
+| POST   | `/files`                                                          | Envia um arquivo usando o campo multipart `file`                           |
+| GET    | `/files`                                                          | Lista arquivos enviados                                                     |
+| GET    | `/files/{file_id}`                                                 | Baixa um arquivo enviado                                                    |
 
 ## Modelo de Dados
 

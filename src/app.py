@@ -5,19 +5,25 @@ A super simple FastAPI application that allows students to view and sign up
 for extracurricular activities at Mergington High School.
 """
 
-from fastapi import FastAPI, HTTPException
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import RedirectResponse
-import os
+import json
 from pathlib import Path
+from uuid import UUID, uuid4
+
+from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
 
 app = FastAPI(title="Mergington High School API",
               description="API for viewing and signing up for extracurricular activities")
 
-# Mount the static files directory
 current_dir = Path(__file__).parent
-app.mount("/static", StaticFiles(directory=os.path.join(Path(__file__).parent,
-          "static")), name="static")
+static_source_dir = current_dir / "static"
+static_build_dir = current_dir.parent / "dist"
+static_dir = static_build_dir if static_build_dir.is_dir() else static_source_dir
+app.mount("/static", StaticFiles(directory=static_dir), name="static")
+
+UPLOAD_DIR = current_dir / "uploads"
+MAX_UPLOAD_SIZE = 10 * 1024 * 1024
 
 # In-memory activity database
 activities = {
@@ -65,3 +71,66 @@ def signup_for_activity(activity_name: str, email: str):
     # Add student
     activity["participants"].append(email)
     return {"message": f"Signed up {email} for {activity_name}"}
+
+
+@app.post("/files", status_code=201)
+async def upload_file(file: UploadFile = File(...)):
+    filename = Path((file.filename or "").replace("\\", "/")).name
+    if filename in {"", ".", ".."}:
+        raise HTTPException(status_code=400, detail="A valid filename is required")
+
+    contents = await file.read(MAX_UPLOAD_SIZE + 1)
+    if len(contents) > MAX_UPLOAD_SIZE:
+        raise HTTPException(status_code=413, detail="File exceeds the 10 MB limit")
+
+    file_id = str(uuid4())
+    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    (UPLOAD_DIR / file_id).write_bytes(contents)
+    (UPLOAD_DIR / f"{file_id}.json").write_text(
+        json.dumps({"filename": filename}), encoding="utf-8"
+    )
+    return {"id": file_id, "filename": filename, "size": len(contents)}
+
+
+@app.get("/files")
+def list_files():
+    files = []
+    if not UPLOAD_DIR.is_dir():
+        return {"files": files}
+
+    for metadata_path in UPLOAD_DIR.glob("*.json"):
+        try:
+            file_id = str(UUID(metadata_path.stem))
+            metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+            file_path = UPLOAD_DIR / file_id
+            if file_path.is_file():
+                files.append({
+                    "id": file_id,
+                    "filename": metadata["filename"],
+                    "size": file_path.stat().st_size,
+                })
+        except (OSError, ValueError, KeyError, TypeError):
+            continue
+
+    files.sort(key=lambda item: item["filename"].casefold())
+    return {"files": files}
+
+
+@app.get("/files/{file_id}")
+def download_file(file_id: str):
+    try:
+        file_id = str(UUID(file_id))
+        metadata = json.loads(
+            (UPLOAD_DIR / f"{file_id}.json").read_text(encoding="utf-8")
+        )
+        file_path = UPLOAD_DIR / file_id
+        if not file_path.is_file():
+            raise FileNotFoundError
+    except (ValueError, OSError, KeyError, TypeError):
+        raise HTTPException(status_code=404, detail="File not found") from None
+
+    return FileResponse(
+        file_path,
+        media_type="application/octet-stream",
+        filename=metadata["filename"],
+    )

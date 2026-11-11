@@ -40,3 +40,6 @@ Thumbs.db
 .actrc*
 
 __pycache__/
+node_modules/
+/dist/
+src/uploads/
